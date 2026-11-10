@@ -20,45 +20,95 @@ import sys
 import traceback
 from pathlib import Path
 
-from PyQt5.QtCore import (
-    QFileSystemWatcher,
-    QObject,
-    Qt,
-    QThread,
-    QTimer,
-    pyqtSignal,
-    pyqtSlot,
-)
-from PyQt5.QtGui import QBrush, QColor, QFont, QKeySequence
-from PyQt5.QtWidgets import (
-    QAbstractItemView,
-    QAction,
-    QApplication,
-    QCheckBox,
-    QDialog,
-    QDialogButtonBox,
-    QDoubleSpinBox,
-    QFileDialog,
-    QFormLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QMenu,
-    QMessageBox,
-    QPlainTextEdit,
-    QProgressBar,
-    QPushButton,
-    QSpinBox,
-    QSplitter,
-    QTableWidget,
-    QTableWidgetItem,
-    QToolBar,
-    QVBoxLayout,
-    QWidget,
-)
+try:
+    from PyQt5.QtCore import (
+        QFileSystemWatcher,
+        QObject,
+        Qt,
+        QThread,
+        QTimer,
+        pyqtSignal,
+        pyqtSlot,
+    )
+    from PyQt5.QtGui import QBrush, QColor, QFont, QKeySequence
+    from PyQt5.QtWidgets import (
+        QAbstractItemView,
+        QAction,
+        QApplication,
+        QCheckBox,
+        QDialog,
+        QDialogButtonBox,
+        QDoubleSpinBox,
+        QFileDialog,
+        QFormLayout,
+        QGroupBox,
+        QHBoxLayout,
+        QHeaderView,
+        QLabel,
+        QLineEdit,
+        QMainWindow,
+        QMenu,
+        QMessageBox,
+        QPlainTextEdit,
+        QProgressBar,
+        QPushButton,
+        QSpinBox,
+        QSplitter,
+        QTableWidget,
+        QTableWidgetItem,
+        QToolBar,
+        QVBoxLayout,
+        QWidget,
+    )
+except ModuleNotFoundError:
+    import subprocess
+
+    print("检测到当前环境尚未安装 PyQt5，正在自动安装依赖...", file=sys.stderr)
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "PyQt5>=5.15.0"])
+        from PyQt5.QtCore import (
+            QFileSystemWatcher,
+            QObject,
+            Qt,
+            QThread,
+            QTimer,
+            pyqtSignal,
+            pyqtSlot,
+        )
+        from PyQt5.QtGui import QBrush, QColor, QFont, QKeySequence
+        from PyQt5.QtWidgets import (
+            QAbstractItemView,
+            QAction,
+            QApplication,
+            QCheckBox,
+            QDialog,
+            QDialogButtonBox,
+            QDoubleSpinBox,
+            QFileDialog,
+            QFormLayout,
+            QGroupBox,
+            QHBoxLayout,
+            QHeaderView,
+            QLabel,
+            QLineEdit,
+            QMainWindow,
+            QMenu,
+            QMessageBox,
+            QPlainTextEdit,
+            QProgressBar,
+            QPushButton,
+            QSpinBox,
+            QSplitter,
+            QTableWidget,
+            QTableWidgetItem,
+            QToolBar,
+            QVBoxLayout,
+            QWidget,
+        )
+    except Exception as _exc:
+        raise SystemExit(
+            f"缺少 GUI 运行依赖 PyQt5 且自动安装失败：{_exc}\n请在终端手动运行：pip install PyQt5"
+        ) from _exc
 
 from bibfetch.models import HeadingEntry, ResolvedEntry
 from bibfetch.openalex import ApiError

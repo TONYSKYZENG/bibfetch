@@ -24,43 +24,45 @@
 
 要求 Python 3.10+。
 
-不需要安装，直接运行：
+### 方式 1：一键自动安装（推荐）
+
+直接在终端运行项目内置的自动安装脚本：
 
 ```bash
-python3 -m bibfetch XXX.md
+chmod +x install.sh
+./install.sh
 ```
 
-会默认生成：
+脚本将自动检查 Python 环境并完成所有依赖（包括 PyQt5）的安装与命令绑定。
 
-```text
-XXX.bib
-XXX.report.json
-XXX.missing.txt        # 只有存在未找到条目时才生成
-```
+### 方式 2：使用 pip 安装
 
-指定输出路径：
-
-```bash
-python3 -m bibfetch XXX.md -o references.bib
-```
-
-也可以安装为命令行工具：
+可以直接使用标准命令安装，核心依赖将自动安装：
 
 ```bash
 pip install -e .
+# 或使用 requirements 文件：
+pip install -r requirements.txt
+```
+
+### 方式 3：免手动安装运行（智能按需安装）
+
+如果未预先安装 PyQt5，直接启动 GUI 时系统会自动检测并在当前环境中静默补齐安装：
+
+```bash
+python3 -m gui
+```
+
+启动命令行检索：
+
+```bash
+python3 -m bibfetch XXX.md -o references.bib
+# 安装后也可直接使用命令：
 bibfetch XXX.md -o references.bib
+bibfetch-gui
 ```
 
 ## 图形界面（PyQt5）
-
-仓库自带一个 PyQt5 文献管理界面，工程文件与命令行缓存互相独立。
-
-```bash
-pip install -e ".[gui]"
-python3 -m gui
-# 或安装后：
-bibfetch-gui
-```
 
 界面功能：
 
