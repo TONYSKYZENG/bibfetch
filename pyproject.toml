@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=67"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bibfetch"
+version = "1.0.0"
+description = "Fetch and merge high-fidelity BibTeX records from OpenAlex"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "bibfetch contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+gui = ["PyQt5>=5.15"]
+
+[project.scripts]
+bibfetch = "bibfetch.cli:main"
+bibfetch-gui = "gui.app:main"
+
+[tool.setuptools]
+packages = ["bibfetch", "gui"]
