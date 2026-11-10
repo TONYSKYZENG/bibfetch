@@ -20,7 +20,7 @@ from typing import Any
 from bibfetch.bibtex import merge_entries
 from bibfetch.cache import JsonCache
 from bibfetch.matching import normalize_title
-from bibfetch.md_parser import parse_markdown_file
+from bibfetch.md_parser import parse_markdown_file, resolve_document_path
 from bibfetch.models import Candidate, HeadingEntry, Issue, ResolvedEntry
 from bibfetch.openalex import ApiError, OpenAlexClient
 from bibfetch.pipeline import resolve_entry
@@ -481,7 +481,7 @@ class Project:
         manual overrides survive a re-import as long as the title is unchanged.
         """
 
-        source = Path(markdown_path).expanduser()
+        source = resolve_document_path(markdown_path)
         level = heading_level if heading_level is not None else self.options.heading_level
         headings, issues = parse_markdown_file(source, heading_level=level)
 

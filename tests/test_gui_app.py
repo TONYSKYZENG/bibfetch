@@ -7,17 +7,24 @@ from pathlib import Path
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QMessageBox
+try:
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtWidgets import QApplication, QMessageBox
 
-from gui.app import MainWindow, ManualInsertDialog
+    from gui.app import MainWindow, ManualInsertDialog
+
+    HAS_PYQT5 = True
+except ImportError:
+    HAS_PYQT5 = False
+
 from gui.project import EntryRecord, Project, ProjectOptions
 
-# Prevent modal dialogs from blocking headless tests
-QMessageBox.information = lambda *args, **kwargs: QMessageBox.Ok
-QMessageBox.warning = lambda *args, **kwargs: QMessageBox.Ok
-QMessageBox.critical = lambda *args, **kwargs: QMessageBox.Ok
-QMessageBox.question = lambda *args, **kwargs: QMessageBox.Yes
+if HAS_PYQT5:
+    # Prevent modal dialogs from blocking headless tests
+    QMessageBox.information = lambda *args, **kwargs: QMessageBox.Ok
+    QMessageBox.warning = lambda *args, **kwargs: QMessageBox.Ok
+    QMessageBox.critical = lambda *args, **kwargs: QMessageBox.Ok
+    QMessageBox.question = lambda *args, **kwargs: QMessageBox.Yes
 
 _APP = None
 
@@ -29,6 +36,7 @@ def get_app() -> QApplication:
     return _APP
 
 
+@unittest.skipUnless(HAS_PYQT5, "PyQt5 not installed")
 class GuiAppTests(unittest.TestCase):
     def setUp(self) -> None:
         self.app = get_app()

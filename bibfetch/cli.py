@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import __version__
 from .cache import JsonCache
+from .md_parser import resolve_document_path
 from .openalex import ApiError, OpenAlexClient
 from .pipeline import PipelineOptions, run_pipeline
 
@@ -31,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
             "in OpenAlex, and merge high-fidelity BibTeX entries into one file."
         ),
     )
-    parser.add_argument("markdown", type=Path, help="Markdown file to scan")
+    parser.add_argument("markdown", type=Path, help="Markdown or HTML file (or directory) to scan")
     parser.add_argument(
         "-o",
         "--output",
@@ -134,12 +135,17 @@ def main(argv: list[str] | None = None) -> int:
         force=True,
     )
 
-    input_path: Path = args.markdown
+    input_path: Path = resolve_document_path(args.markdown)
     if not input_path.is_file():
-        LOGGER.error("Markdown file not found: %s", input_path)
+        LOGGER.error("Document file not found: %s", args.markdown)
         return 1
 
-    output_path: Path = args.output or input_path.with_suffix(".bib")
+    if args.output is not None:
+        output_path = args.output
+    elif args.markdown.is_dir():
+        output_path = args.markdown.with_suffix(".bib")
+    else:
+        output_path = input_path.with_suffix(".bib")
     cache_path = None if args.no_cache else (args.cache or _default_cache_path())
     cache = JsonCache(cache_path, ttl_days=args.cache_ttl, enabled=not args.no_cache)
     client = OpenAlexClient(

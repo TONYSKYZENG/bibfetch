@@ -1,12 +1,16 @@
 # bibfetch
 
-从 Markdown 笔记中的 `##### 年份. 会议/期刊. 标题` 小标题批量提取文献，用 **OpenAlex** 检索，优先选择正式会议/期刊版本，自动生成并合并高保真 BibTeX。未找到的条目会在终端、`.missing.txt` 和 `.report.json` 中明确告警。
+从 Markdown 笔记或 HTML 文档（例如 Google Docs / Word 导出的网页目录如 `usr/RVVAE`）中的 `##### 年份. 会议/期刊. 标题` 或 `<h5...>年份. 会议/期刊. 标题</h5>` 小标题批量提取文献，用 **OpenAlex** 检索，优先选择正式会议/期刊版本，自动生成并合并高保真 BibTeX。未找到的条目会在终端、`.missing.txt` 和 `.report.json` 中明确告警。
 
 ## 功能
 
-- 解析指定 Markdown 文件中固定层级的小标题，例如：
+- 支持指定 **Markdown 文件**（`.md`）或 **HTML 网页/导出目录**（`.html`，如 `usr/RVVAE`），提取对应层级的标题，例如：
   ```markdown
   ##### 2026\. ACL Findings. Failure Makes the Agent Stronger: Enhancing Accuracy through Structured Reflection for Reliable Tool Interactions
+  ```
+  或者 HTML 文档中的：
+  ```html
+  <h5 class="c11"><span>2026. ACL Findings. Failure Makes the Agent Stronger: Enhancing Accuracy through Structured Reflection for Reliable Tool Interactions</span></h5>
   ```
 - 用 OpenAlex 的标题精确检索；精确检索失败时自动退化为关键词检索。
 - 对候选结果打分，优先级为：

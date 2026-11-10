@@ -64,54 +64,72 @@ except ModuleNotFoundError:
     import subprocess
 
     print("检测到当前环境尚未安装 PyQt5，正在自动安装依赖...", file=sys.stderr)
+    cmd = [sys.executable, "-m", "pip", "install", "PyQt5>=5.15.0"]
+    installed = False
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "PyQt5>=5.15.0"])
-        from PyQt5.QtCore import (
-            QFileSystemWatcher,
-            QObject,
-            Qt,
-            QThread,
-            QTimer,
-            pyqtSignal,
-            pyqtSlot,
-        )
-        from PyQt5.QtGui import QBrush, QColor, QFont, QKeySequence
-        from PyQt5.QtWidgets import (
-            QAbstractItemView,
-            QAction,
-            QApplication,
-            QCheckBox,
-            QDialog,
-            QDialogButtonBox,
-            QDoubleSpinBox,
-            QFileDialog,
-            QFormLayout,
-            QGroupBox,
-            QHBoxLayout,
-            QHeaderView,
-            QLabel,
-            QLineEdit,
-            QMainWindow,
-            QMenu,
-            QMessageBox,
-            QPlainTextEdit,
-            QProgressBar,
-            QPushButton,
-            QSpinBox,
-            QSplitter,
-            QTableWidget,
-            QTableWidgetItem,
-            QToolBar,
-            QVBoxLayout,
-            QWidget,
-        )
-    except Exception as _exc:
-        raise SystemExit(
-            f"缺少 GUI 运行依赖 PyQt5 且自动安装失败：{_exc}\n请在终端手动运行：pip install PyQt5"
-        ) from _exc
+        subprocess.check_call(cmd)
+        installed = True
+    except Exception:
+        try:
+            subprocess.check_call(cmd + ["--break-system-packages"])
+            installed = True
+        except Exception:
+            installed = False
+
+    if installed:
+        try:
+            from PyQt5.QtCore import (
+                QFileSystemWatcher,
+                QObject,
+                Qt,
+                QThread,
+                QTimer,
+                pyqtSignal,
+                pyqtSlot,
+            )
+            from PyQt5.QtGui import QBrush, QColor, QFont, QKeySequence
+            from PyQt5.QtWidgets import (
+                QAbstractItemView,
+                QAction,
+                QApplication,
+                QCheckBox,
+                QDialog,
+                QDialogButtonBox,
+                QDoubleSpinBox,
+                QFileDialog,
+                QFormLayout,
+                QGroupBox,
+                QHBoxLayout,
+                QHeaderView,
+                QLabel,
+                QLineEdit,
+                QMainWindow,
+                QMenu,
+                QMessageBox,
+                QPlainTextEdit,
+                QProgressBar,
+                QPushButton,
+                QSpinBox,
+                QSplitter,
+                QTableWidget,
+                QTableWidgetItem,
+                QToolBar,
+                QVBoxLayout,
+                QWidget,
+            )
+        except ModuleNotFoundError as _err:
+            raise ImportError("缺少 GUI 运行依赖 PyQt5，请先运行: pip install PyQt5") from _err
+    else:
+        raise ImportError("缺少 GUI 运行依赖 PyQt5，请在终端运行: pip install PyQt5")
 
 from bibfetch.models import HeadingEntry, ResolvedEntry
-from bibfetch.openalex import ApiError
+from bibfetch.openalex import (
+    ApiError,
+    detect_default_api_key,
+    detect_default_email,
+    request_free_api_key,
+    save_user_config,
+)
 from bibfetch.pipeline import resolve_entry
 
 from .project import (
@@ -128,7 +146,12 @@ from .project import (
 )
 
 PROJECT_FILTER = "bibfetch 工程 (*.bibgui.json *.json);;所有文件 (*)"
-MARKDOWN_FILTER = "Markdown (*.md *.markdown);;所有文件 (*)"
+MARKDOWN_FILTER = (
+    "文献文档 (*.md *.markdown *.html *.htm);;"
+    "Markdown (*.md *.markdown);;"
+    "HTML (*.html *.htm);;"
+    "所有文件 (*)"
+)
 BIBTEX_FILTER = "BibTeX (*.bib);;所有文件 (*)"
 
 STATUS_LABELS = {
@@ -210,7 +233,17 @@ class FetchWorker(QObject):
                         used_keys=used_keys,
                     )
                 except ApiError as exc:
-                    self.failed.emit(record_id, f"OpenAlex 请求失败：{exc}")
+                    err_msg = str(exc)
+                    self.failed.emit(record_id, f"OpenAlex 请求失败：{err_msg}")
+                    if (
+                        "Insufficient budget" in err_msg
+                        or "配额已耗尽" in err_msg
+                        or "尚未激活" in err_msg
+                        or "key_not_activated" in err_msg
+                    ):
+                        # 429 quota exhausted or key not activated: abort remaining queue to avoid spamming
+                        self._cancelled = True
+                        break
                     continue
                 except Exception as exc:  # pragma: no cover - defensive
                     traceback.print_exc()
@@ -230,12 +263,12 @@ class FetchWorker(QObject):
 
 
 class SettingsDialog(QDialog):
-    """OpenAlex/cache settings.  The API key intentionally stays in memory."""
+    """OpenAlex/cache settings. API Key is saved to local config but omitted from project JSON."""
 
     def __init__(self, options: ProjectOptions, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("项目设置")
-        self.setMinimumWidth(470)
+        self.setWindowTitle("项目与 OpenAlex 设置")
+        self.setMinimumWidth(560)
         self._options = options
 
         heading_level = QSpinBox()
@@ -258,12 +291,19 @@ class SettingsDialog(QDialog):
         per_page.setRange(1, 200)
         per_page.setValue(options.per_page)
 
-        mailto = QLineEdit(options.mailto)
-        mailto.setPlaceholderText("you@example.com（OpenAlex polite pool）")
+        mailto = QLineEdit(options.mailto or detect_default_email())
+        mailto.setPlaceholderText("you@example.com（用于 OpenAlex polite pool 及申请 Key）")
 
-        api_key = QLineEdit(options.api_key)
-        api_key.setEchoMode(QLineEdit.Password)
-        api_key.setPlaceholderText("也可使用环境变量 OPENALEX_API_KEY")
+        btn_request_key = QPushButton("申请/重发免费 API Key")
+        btn_request_key.setStatusTip("向 OpenAlex 官方一键申请免费 API Key（每天 1000 次请求）")
+        btn_request_key.clicked.connect(self._request_api_key)
+
+        email_layout = QHBoxLayout()
+        email_layout.addWidget(mailto, 1)
+        email_layout.addWidget(btn_request_key)
+
+        api_key = QLineEdit(options.api_key or detect_default_api_key())
+        api_key.setPlaceholderText("填写 OpenAlex API Key，或点击上方按钮申请")
 
         use_cache = QCheckBox("启用磁盘缓存")
         use_cache.setChecked(options.use_cache)
@@ -279,14 +319,17 @@ class SettingsDialog(QDialog):
         form.addRow("最低标题相似度", min_similarity)
         form.addRow("最低综合得分", min_score)
         form.addRow("每次查询候选数", per_page)
-        form.addRow("OpenAlex 邮箱", mailto)
+        form.addRow("OpenAlex 邮箱", email_layout)
         form.addRow("OpenAlex API Key", api_key)
         form.addRow("缓存", use_cache)
         form.addRow("缓存有效期", cache_ttl)
 
-        note = QLabel("API Key 只保存在当前进程内存中，不会写入工程 JSON。")
+        note = QLabel(
+            "提示：OpenAlex 为匿名 IP 限制了极少的共享日预算。配置 API Key（每天可免费调用 1000 次）"
+            "即可畅通抓取。API Key 会保存在本地配置 ~/.config/bibfetch/config.json，不会写入工程 JSON。"
+        )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #666;")
+        note.setStyleSheet("color: #666; font-size: 11px;")
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -308,15 +351,43 @@ class SettingsDialog(QDialog):
             "cache_ttl": cache_ttl,
         }
 
+    def _request_api_key(self) -> None:
+        email = self._widgets["mailto"].text().strip()
+        if not email or "@" not in email:
+            QMessageBox.warning(self, "邮箱格式不正确", "请先在“OpenAlex 邮箱”输入正确的邮箱地址。")
+            return
+        try:
+            data = request_free_api_key(email)
+            key = data.get("api_key", "")
+            if key:
+                self._widgets["api_key"].setText(key)
+            QMessageBox.information(
+                self,
+                "申请已提交",
+                f"OpenAlex 已向邮箱 {email} 发送了一封激活邮件！\n\n"
+                f"API Key: {key}\n"
+                f"已自动填入设置中。\n\n"
+                "【重要激活步骤】\n"
+                "请立即前往您的邮箱查收标题为:\n"
+                "\"Activate your OpenAlex API key\"\n"
+                "并点击邮件中的激活按钮。激活后该 Key 即可每天享有 1000 次免费抓取额度！",
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "申请失败", f"向 OpenAlex 申请 API Key 失败：\n{exc}")
+
     def apply_to(self, options: ProjectOptions) -> None:
         options.heading_level = self._widgets["heading_level"].value()
         options.min_similarity = self._widgets["min_similarity"].value()
         options.min_score = self._widgets["min_score"].value()
         options.per_page = self._widgets["per_page"].value()
         options.mailto = self._widgets["mailto"].text().strip()
-        options.api_key = self._widgets["api_key"].text()
+        options.api_key = self._widgets["api_key"].text().strip()
         options.use_cache = self._widgets["use_cache"].isChecked()
         options.cache_ttl = self._widgets["cache_ttl"].value()
+        save_user_config({
+            "api_key": options.api_key,
+            "mailto": options.mailto,
+        })
 
 
 class ManualInsertDialog(QDialog):
@@ -487,14 +558,14 @@ class MainWindow(QMainWindow):
         self.action_save_as.setShortcut("Ctrl+Shift+S")
         self.action_save_as.triggered.connect(lambda: self.save_project(save_as=True))
 
-        self.action_import = QAction("导入 Markdown…", self)
+        self.action_import = QAction("导入 Markdown/HTML…", self)
         self.action_import.setShortcut("Ctrl+I")
-        self.action_import.setStatusTip("解析 Markdown 中的 ##### 年份. 会议. 标题")
+        self.action_import.setStatusTip("解析 Markdown 或 HTML 中的 ##### 年份. 会议. 标题")
         self.action_import.triggered.connect(self.import_markdown)
 
-        self.action_sync = QAction("刷新源 MD", self)
+        self.action_sync = QAction("刷新源文档", self)
         self.action_sync.setShortcut("F6")
-        self.action_sync.setStatusTip("从源 Markdown 文件同步最新修改（自动保留手动插入和覆盖）")
+        self.action_sync.setStatusTip("从源 Markdown 或 HTML 文档同步最新修改（自动保留手动插入和覆盖）")
         self.action_sync.triggered.connect(lambda: self.sync_markdown(silent=False))
 
         self.action_insert = QAction("手动插入文献…", self)
@@ -801,7 +872,7 @@ class MainWindow(QMainWindow):
     def import_markdown(self) -> None:
         start = str(self.project.markdown_path or Path.cwd())
         filename, _ = QFileDialog.getOpenFileName(
-            self, "导入 Markdown", start, MARKDOWN_FILTER
+            self, "导入 Markdown 或 HTML 文档", start, MARKDOWN_FILTER
         )
         if not filename:
             return
@@ -835,7 +906,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(
                     self,
                     "源文件不存在",
-                    f"找不到源 Markdown 文件：\n{self.project.markdown_path}",
+                    f"找不到源文档文件：\n{self.project.markdown_path}",
                 )
             return
         try:
@@ -846,10 +917,10 @@ class MainWindow(QMainWindow):
             return
         self._mark_dirty()
         self._refresh_table()
-        msg = f"已从源 Markdown 同步（共 {total} 条，新增 {new_count} 条）"
+        msg = f"已从源文档同步（共 {total} 条，新增 {new_count} 条）"
         self.statusBar().showMessage(msg, 5000)
         if not silent:
-            info = f"源 Markdown 同步完成：\n总计 {total} 条文献，本次新增 {new_count} 条。"
+            info = f"源文档同步完成：\n总计 {total} 条文献，本次新增 {new_count} 条。"
             if issues:
                 lines = [f"[{issue.severity}] {issue.code}: {issue.message}" for issue in issues]
                 info += "\n\n提示：\n" + "\n".join(lines[:15])
@@ -1018,6 +1089,21 @@ class MainWindow(QMainWindow):
         record.mark_error("openalex_request_failed", message)
         self._mark_dirty()
         self._refresh_table(select_id=self._current_id or record_id)
+        if (
+            "Insufficient budget" in message
+            or "配额已耗尽" in message
+            or "尚未激活" in message
+            or "key_not_activated" in message
+        ):
+            reply = QMessageBox.question(
+                self,
+                "OpenAlex 配额或授权提示",
+                f"{message}\n\n是否立即打开【项目设置】申请或配置 API Key？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reply == QMessageBox.Yes:
+                self.show_settings()
 
     @pyqtSlot(bool)
     def _on_fetch_finished(self, cancelled: bool) -> None:

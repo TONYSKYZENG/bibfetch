@@ -21,7 +21,7 @@ from .matching import (
     rank_candidates,
     venue_family,
 )
-from .md_parser import parse_markdown_file
+from .md_parser import parse_markdown_file, resolve_document_path
 from .models import Candidate, HeadingEntry, Issue, ResolvedEntry
 from .openalex import ApiError, OpenAlexClient
 from .report import write_bibtex, write_json_report, write_missing_report
@@ -264,7 +264,7 @@ def run_pipeline(
     """Read Markdown headings, query OpenAlex, and merge the resolved BibTeX."""
 
     options = options or PipelineOptions()
-    input_path = Path(input_path)
+    input_path = resolve_document_path(input_path)
     output_path = Path(output_path)
     if report_path is None:
         report_path = output_path.with_suffix(".report.json")
